@@ -11,6 +11,7 @@ export interface Question {
   codigoQ: string
   seqNum: string
   unitKey: string | null
+  percursoMod: string       // module number from "Percurso X.Y" → "Y"
   alternativas: Alternative[]
   feedbackGeral: string
   linha: number
@@ -36,13 +37,12 @@ export interface ConvertOptions {
   splitByUnit: boolean
   qmode: QMode
   unitOffsets: Record<string, number>
-  unitTemplates: Record<string, string>
+  unitTemplates: Record<string, string>  // per-unit code template override
 }
 
 export interface CodeSegments {
   prod: string
   ano: string
-  unit: string
   mod: string
   tipo: 'O' | 'D'
   [key: string]: string

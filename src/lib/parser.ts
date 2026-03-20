@@ -43,17 +43,32 @@ export function parseText(texto: string): ParseResult {
       const codigoQ    = codeMatch ? codeMatch[1] : ''
       const parenMatch = l.match(/[(（](.*?)[)）]/)
       const tituloHint = parenMatch ? parenMatch[1].trim() : ''
-      const percMatch  = tituloHint.match(RE_PERCURSO)
-      const uzMatch    = codigoQ.match(/\.(U\d+)\./i)
-      const unitKey    = percMatch
-        ? 'P' + percMatch[1]
-        : uzMatch ? uzMatch[1].toUpperCase() : null
-      const numMatch   = l.match(/^Quest[aã]o\s+(\d+)/i)
+
+      // Pattern: "Percurso X.Y" → uz=UX, mod=Y
+      // Pattern: "Percurso X"   → uz=UX, mod=''
+      const percFullMatch = tituloHint.match(/Percurso\s+(\d+)\.(\d+)/i)
+      const percSimpleMatch = tituloHint.match(/Percurso\s+(\d+)/i)
+
+      let unitKey: string | null = null
+      let percursoMod = ''
+
+      if (percFullMatch) {
+        // "Percurso 1.2" → unitKey=P1.2, uz=U1, mod=2
+        unitKey    = `P${percFullMatch[1]}.${percFullMatch[2]}`
+        percursoMod = percFullMatch[2]
+      } else if (percSimpleMatch) {
+        unitKey = `P${percSimpleMatch[1]}`
+      } else {
+        const uzMatch = codigoQ.match(/\.(U\d+)\./i)
+        unitKey = uzMatch ? uzMatch[1].toUpperCase() : null
+      }
+
+      const numMatch = l.match(/^Quest[aã]o\s+(\d+)/i)
 
       perguntaAtual = {
         texto: '', tituloHint, codigoQ,
         seqNum: numMatch ? numMatch[1] : '',
-        unitKey, alternativas: [], feedbackGeral: '',
+        unitKey, percursoMod, alternativas: [], feedbackGeral: '',
         linha: numeroLinha, formato: 'B'
       }
       perguntas.push(perguntaAtual)
@@ -67,7 +82,7 @@ export function parseText(texto: string): ParseResult {
       perguntaAtual = {
         texto: textoSemNum, tituloHint: '', codigoQ: '',
         seqNum: l.match(/^(\d+)/)?.[1] ?? '',
-        unitKey: null, alternativas: [], feedbackGeral: '',
+        unitKey: null, percursoMod: '', alternativas: [], feedbackGeral: '',
         linha: numeroLinha, formato: 'A'
       }
       perguntas.push(perguntaAtual)

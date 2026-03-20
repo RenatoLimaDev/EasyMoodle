@@ -44,6 +44,7 @@ export interface CodeSegments {
   unit: string
   mod: string
   tipo: 'O' | 'D'
+  [key: string]: string
 }
 
 export interface Profile {

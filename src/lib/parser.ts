@@ -5,7 +5,6 @@ const RE_QUESTAO_NUM  = /^[0-9]+[).]\s+/
 const RE_ALTERNATIVA  = /^[A-Ea-e][).]\s+/
 const RE_ANSWER       = /^ANSWER\s*:\s*([A-Ea-e?])(?:\s*;(?:\s*Feedback\s*:\s*(.+))?)?/i
 const RE_FEEDBACK_LINE= /^Feedback\s*:\s*(.+)/i
-const RE_PERCURSO     = /Percurso\s+(\d+)/i
 const RE_CODE_PATTERN = /\b(\d{2,6})\.(\d{2,5}(?:\.\d)?)\.([Uu]\d+)\.(\d+(?:\.\d+)*)\.([OoDd])\.([Qq]\d+)\b/
 
 export function parseText(texto: string): ParseResult {

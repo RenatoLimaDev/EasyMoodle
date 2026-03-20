@@ -30,6 +30,8 @@ export function StepConvert() {
   const [avisos, setAvisos]         = useState<string[]>([])
   const [done, setDone]             = useState(false)
   const [offsets, setOffsets]       = useState<Record<string, number>>({})
+  // Per-unit: unit key → { uz, mod }
+  const [unitSegs, setUnitSegs]     = useState<Record<string, { uz: string; mod: string }>>({})
 
   // Detect code on mount
   useEffect(() => {
@@ -46,13 +48,22 @@ export function StepConvert() {
     }
   }, [])
 
-  // Rebuild code template from segments
+  // Rebuild global code template from segments (used only when single unit)
   useEffect(() => {
     const { prod, ano, unit, mod, tipo } = segments
     if (prod && ano && unit && mod && tipo) {
       setCodeTemplate(`${prod}.${ano}.${unit}.${mod}.${tipo}.Q{n}`)
     }
   }, [segments])
+
+  // Build per-unit code template
+  const buildUnitTemplate = (unitKey: string) => {
+    const { prod, ano, tipo } = segments
+    const us = unitSegs[unitKey]
+    if (!prod || !ano || !tipo || !us?.uz) return ''
+    const mod = us.mod || segments.mod
+    return `${prod}.${ano}.${us.uz}.${mod}.${tipo}.Q{n}`
+  }
 
   const unitGroups = groupByUnit(perguntas)
   const multiUnit  = unitGroups.length > 1
@@ -69,7 +80,16 @@ export function StepConvert() {
     })
 
     setAvisos(warns)
-    const opts = { ...options, codeTemplate, unitOffsets: offsets }
+
+    // Build per-unit code templates
+    const groups = groupByUnit(perguntas)
+    const unitTemplates: Record<string, string> = {}
+    groups.forEach(g => {
+      const t = buildUnitTemplate(g.unitKey)
+      if (t) unitTemplates[g.unitKey] = t
+    })
+
+    const opts = { ...options, codeTemplate, unitOffsets: offsets, unitTemplates }
     const result = buildAllUnits(perguntas, opts, detectedPattern)
     setUnits(result)
     setLoading(false)
@@ -141,20 +161,23 @@ export function StepConvert() {
       </div>
 
       {/* Code builder */}
-      <div className="card border-l-4 border-l-accent4 space-y-3">
+      <div className="card border-l-4 border-l-accent4 space-y-4">
         <h3 className="font-bold text-accent4 text-sm">🏷️ Código da questão</h3>
         {detectedPattern && (
           <p className="text-xs font-mono text-white/50">
             ✅ Padrão detectado: <span className="text-accent">{detectedPattern}</span>
           </p>
         )}
+
+        {/* Global fields: Prod, Ano/Sem, Tipo — shared across all percursos */}
         <div className="bg-surface2 border border-border rounded-xl p-4">
+          <div className="text-[10px] font-mono text-white/30 uppercase tracking-widest mb-3">
+            Campos globais — iguais em todos os percursos
+          </div>
           <div className="flex items-end gap-1 flex-wrap">
             {[
-              { key: 'prod', label: 'Prod.',    ph: '001', w: '72px' },
-              { key: 'ano',  label: 'Ano/Sem',  ph: '261', w: '72px' },
-              { key: 'unit', label: 'Unidade',  ph: 'U1',  w: '64px' },
-              { key: 'mod',  label: 'Módulo',   ph: '3',   w: '60px' },
+              { key: 'prod', label: 'Prod.',   ph: '001', w: '72px' },
+              { key: 'ano',  label: 'Ano/Sem', ph: '261', w: '72px' },
             ].map(({ key, label, ph, w }) => (
               <div key={key} className="flex flex-col gap-1 items-center">
                 <span className="text-[10px] font-mono text-white/30 uppercase tracking-wide">{label}</span>
@@ -169,7 +192,7 @@ export function StepConvert() {
                 />
               </div>
             ))}
-            <span className="text-border text-xl pb-2 px-0.5">.</span>
+            <span style={{ color: 'var(--color-border)', fontSize: '20px', paddingBottom: '8px' }}>.</span>
             <div className="flex flex-col gap-1 items-center">
               <span className="text-[10px] font-mono text-white/30 uppercase tracking-wide">Tipo</span>
               <select
@@ -183,21 +206,61 @@ export function StepConvert() {
                 <option value="D">D — Dissertativa</option>
               </select>
             </div>
-            <span className="text-border text-xl pb-2 px-0.5">.</span>
-            <div className="flex flex-col gap-1 items-center">
-              <span className="text-[10px] font-mono text-white/30 uppercase tracking-wide">Questão</span>
-              <div className="bg-accent/10 border border-accent/30 rounded-lg px-3 py-1.5 font-mono
-                              font-bold text-sm text-accent" style={{ width: '56px', textAlign: 'center' }}>
-                Q{'{n}'}
-              </div>
-            </div>
           </div>
-          {codeTemplate && (
-            <div className="mt-3 text-xs font-mono text-white/40">
-              Resultado: <span className="text-accent font-bold">{codeTemplate.replace('{n}','1')}</span>
-              <span className="text-white/20">, Q2, Q3…</span>
-            </div>
-          )}
+        </div>
+
+        {/* Per-unit fields: UZ + Módulo — one row per percurso */}
+        <div className="bg-surface2 border border-border rounded-xl p-4 space-y-3">
+          <div className="text-[10px] font-mono text-white/30 uppercase tracking-widest">
+            Por percurso — Unidade (UZ) e Módulo
+          </div>
+          {unitGroups.map(g => {
+            const us = unitSegs[g.unitKey] ?? { uz: '', mod: '' }
+            const preview = buildUnitTemplate(g.unitKey)
+            return (
+              <div key={g.unitKey} className="flex items-center gap-2 flex-wrap">
+                <span className="font-mono text-xs text-accent4 w-8 flex-shrink-0">{g.unitKey}</span>
+                <div className="flex flex-col gap-0.5 items-center">
+                  <span className="text-[10px] font-mono text-white/30 uppercase">UZ</span>
+                  <input
+                    className="bg-surface border border-border rounded-lg text-center font-mono font-bold text-sm
+                               text-white px-2 py-1.5 outline-none focus:border-accent4 transition-colors"
+                    style={{ width: '60px' }}
+                    placeholder="U1"
+                    value={us.uz}
+                    onChange={e => setUnitSegs(prev => ({
+                      ...prev,
+                      [g.unitKey]: { ...prev[g.unitKey] ?? { uz: '', mod: '' }, uz: e.target.value }
+                    }))}
+                    maxLength={4}
+                  />
+                </div>
+                <span style={{ color: 'var(--color-border)', fontSize: '16px' }}>.</span>
+                <div className="flex flex-col gap-0.5 items-center">
+                  <span className="text-[10px] font-mono text-white/30 uppercase">Módulo</span>
+                  <input
+                    className="bg-surface border border-border rounded-lg text-center font-mono font-bold text-sm
+                               text-white px-2 py-1.5 outline-none focus:border-accent4 transition-colors"
+                    style={{ width: '56px' }}
+                    placeholder="3"
+                    value={us.mod}
+                    onChange={e => setUnitSegs(prev => ({
+                      ...prev,
+                      [g.unitKey]: { ...prev[g.unitKey] ?? { uz: '', mod: '' }, mod: e.target.value }
+                    }))}
+                    maxLength={6}
+                  />
+                </div>
+                <span style={{ color: 'var(--color-border)', fontSize: '16px' }}>.</span>
+                <span className="font-mono text-xs text-white/25">Q{'{n}'}</span>
+                {preview && (
+                  <span className="font-mono text-xs text-accent ml-1">
+                    → {preview.replace('{n}', '1')}
+                  </span>
+                )}
+              </div>
+            )
+          })}
         </div>
       </div>
 
@@ -251,12 +314,12 @@ export function StepConvert() {
       <div className="grid grid-cols-2 gap-3">
         <div className="card">
           <label className="label">Feedback — acerto ✅</label>
-          <textarea className="input min-h-15 resize-y text-xs" value={options.fbCorrect}
+          <textarea className="input min-h-[60px] resize-y text-xs" value={options.fbCorrect}
             onChange={e => setOptions({ fbCorrect: e.target.value })} placeholder="Parabéns! (opcional)" />
         </div>
         <div className="card">
           <label className="label">Feedback — erro ❌</label>
-          <textarea className="input min-h-15 resize-y text-xs" value={options.fbIncorrect}
+          <textarea className="input min-h-[60px] resize-y text-xs" value={options.fbIncorrect}
             onChange={e => setOptions({ fbIncorrect: e.target.value })} placeholder="Incorreto. (opcional)" />
         </div>
       </div>
@@ -369,7 +432,7 @@ export function StepConvert() {
               </button>
             </div>
             <textarea readOnly
-              className="input min-h-40 text-[11px] leading-relaxed text-white/40"
+              className="input min-h-[160px] text-[11px] leading-relaxed text-white/40"
               value={units[0]?.xml ?? ''}
             />
           </div>

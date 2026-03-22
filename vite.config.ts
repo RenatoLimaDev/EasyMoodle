@@ -4,7 +4,7 @@ import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
 
 export default defineConfig({
-  base: '/QUIZVERTER/',
+  base: '/EasyMoodle/',
   plugins: [
     react(),
     tailwindcss(),   // v4: plugin nativo no Vite, sem postcss

@@ -134,6 +134,30 @@ export async function extractText(file: File): Promise<string> {
   return new TextDecoder(enc).decode(bytes)
 }
 
+export function extractXmlQuestions(xmlText: string): Array<{ name: string; texto: string }> {
+  const questions: Array<{ name: string; texto: string }> = []
+  const blocks = xmlText.match(/<question[\s\S]*?<\/question>/g) ?? []
+
+  for (const block of blocks) {
+    if (/type="category"/.test(block)) continue
+
+    const nameMatch = block.match(/<name>\s*<text>([\s\S]*?)<\/text>\s*<\/name>/)
+    const textMatch = block.match(/<questiontext[\s\S]*?<text>([\s\S]*?)<\/text>/)
+    if (!textMatch) continue
+
+    const name = nameMatch ? nameMatch[1].trim() : ''
+    const raw  = textMatch[1]
+      .replace(/<!\[CDATA\[|\]\]>/g, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+      .replace(/\s+/g, ' ').trim()
+
+    if (raw) questions.push({ name, texto: raw })
+  }
+
+  return questions
+}
+
 export function triggerDownload(content: string, filename: string): void {
   const blob = new Blob([content], { type: 'text/xml;charset=utf-8' })
   const url  = URL.createObjectURL(blob)

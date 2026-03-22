@@ -19,9 +19,9 @@ function resolveQuestionName(
   detectedPattern: string,
   unitTemplate?: string
 ): string {
+  if (p.codigoQ)    return escapeXml(p.codigoQ)
   if (unitTemplate) return escapeXml(unitTemplate.replace(/\{n\}/g, String(qNum)))
   if (codeTemplate) return escapeXml(codeTemplate.replace(/\{n\}/g, String(qNum)))
-  if (p.codigoQ)    return escapeXml(p.codigoQ)
   if (detectedPattern) return escapeXml(detectedPattern.replace(/\{n\}/g, String(qNum)))
   if (p.tituloHint) return `${escapeXml(prefix)} ${qNum} — ${escapeXml(p.tituloHint)}`
   return `${escapeXml(prefix)} ${qNum}`

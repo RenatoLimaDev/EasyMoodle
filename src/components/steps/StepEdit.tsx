@@ -1,5 +1,7 @@
+import { useRef, useState } from 'react'
 import { useStore } from '@/store'
-import { parseText } from '@/lib/parser'
+import { parseText, findDuplicates, findCrossDuplicates } from '@/lib/parser'
+import { extractXmlQuestions } from '@/lib/extractor'
 
 export function StepEdit() {
   const rawText   = useStore(s => s.rawText)
@@ -71,6 +73,24 @@ export function StepEdit() {
     }
 
     updateText(out.join('\n'))
+  }
+
+  const xmlRef    = useRef<HTMLInputElement>(null)
+  const [refQuestions, setRefQuestions] = useState<Array<{ name: string; texto: string }>>([])
+  const [refFilename, setRefFilename]   = useState('')
+  const [refError, setRefError]         = useState('')
+
+  const loadRefXml = async (file: File) => {
+    setRefError('')
+    try {
+      const text = await file.text()
+      const qs = extractXmlQuestions(text)
+      if (qs.length === 0) { setRefError('Nenhuma questão encontrada no XML.'); return }
+      setRefQuestions(qs)
+      setRefFilename(file.name)
+    } catch {
+      setRefError('Erro ao ler o arquivo XML.')
+    }
   }
 
   const lines = rawText.split('\n').filter(l => l.trim()).length
@@ -146,6 +166,129 @@ export function StepEdit() {
           </div>
         )}
       </div>
+
+      {/* Cross-check against Moodle XML */}
+      <div className="card border-l-4 border-l-accent4 space-y-3">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <div className="text-[11px] font-mono uppercase tracking-widest text-accent4">
+              🔍 Verificar contra banco Moodle
+            </div>
+            <div className="text-[11px] text-white/30 font-mono mt-0.5">
+              Importe um XML exportado do Moodle para detectar questões já cadastradas
+            </div>
+          </div>
+          {refFilename && (
+            <button onClick={() => { setRefQuestions([]); setRefFilename('') }}
+              className="text-[11px] font-mono text-white/30 hover:text-accent2 transition-colors">
+              ✕ remover
+            </button>
+          )}
+        </div>
+
+        {!refFilename ? (
+          <div>
+            <input ref={xmlRef} type="file" accept=".xml" className="hidden"
+              onChange={e => e.target.files?.[0] && loadRefXml(e.target.files[0])} />
+            <button onClick={() => xmlRef.current?.click()}
+              className="w-full border border-dashed border-accent4/30 rounded-lg py-3 text-xs
+                         font-mono text-accent4/60 hover:border-accent4/60 hover:text-accent4
+                         hover:bg-accent4/5 transition-all">
+              + Selecionar arquivo .xml do Moodle
+            </button>
+            {refError && <p className="text-accent2 text-xs font-mono mt-2">{refError}</p>}
+          </div>
+        ) : (
+          (() => {
+            const cross = findCrossDuplicates(perguntas, refQuestions)
+            const removeQuestion = (idx: number) => setParsed(perguntas.filter((_, i) => i !== idx), avisos)
+            return (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 font-mono text-xs">
+                  <span className="text-accent4">✓ {refFilename}</span>
+                  <span className="text-white/25">— {refQuestions.length} questões no banco</span>
+                </div>
+                {cross.length === 0 ? (
+                  <p className="text-accent text-xs font-mono">✅ Nenhuma duplicata com o banco.</p>
+                ) : (
+                  <div className="space-y-3 max-h-48 overflow-y-auto">
+                    <p className="text-accent2 text-xs font-mono">⚠️ {cross.length} questão(ões) já existem no banco:</p>
+                    {cross.map((d, i) => (
+                      <div key={i} className="space-y-1">
+                        <div className="text-xs font-mono text-white/50">
+                          <span className="text-accent3">{d.type === 'code' ? '🔑 Código' : '📄 Texto'} igual</span>
+                          <span className="text-white/30 mx-1">—</span>
+                          <span className="text-accent2">Q{d.newIdx + 1}</span>
+                          {d.refName && <span className="text-white/25 ml-1">↔ {d.refName}</span>}
+                          <span className="text-white/20 block pl-4 truncate">
+                            {d.refTexto.slice(0, 80)}{d.refTexto.length > 80 ? '…' : ''}
+                          </span>
+                        </div>
+                        <button onClick={() => removeQuestion(d.newIdx)}
+                          className="ml-0 text-[11px] font-mono px-2 py-0.5 rounded border border-accent2/30
+                                     text-accent2/70 hover:bg-accent2/15 hover:text-accent2 hover:border-accent2/60
+                                     transition-all">
+                          remover Q{d.newIdx + 1}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })()
+        )}
+      </div>
+
+      {/* Duplicates */}
+      {(() => {
+        const duplicates = findDuplicates(perguntas)
+        if (duplicates.length === 0) return null
+
+        const removeQuestion = (idx: number) => {
+          const novas = perguntas.filter((_, i) => i !== idx)
+          setParsed(novas, avisos)
+        }
+
+        return (
+          <div className="card border-l-4 border-l-accent2 space-y-2">
+            <div className="text-[11px] font-mono uppercase tracking-widest text-accent2 mb-1">
+              ⚠️ {duplicates.length} duplicata(s) detectada(s)
+            </div>
+            <div className="space-y-3 max-h-48 overflow-y-auto">
+              {duplicates.map((d, i) => (
+                <div key={i} className="space-y-1">
+                  <div className="text-xs font-mono text-white/50">
+                    <span className="text-accent3">
+                      {d.type === 'code' ? '🔑 Código' : '📄 Texto'} igual
+                    </span>
+                    <span className="text-white/30 mx-1">—</span>
+                    <span className="text-accent2">
+                      Q{d.indexes.map(idx => idx + 1).join(' e Q')}
+                    </span>
+                    <span className="text-white/25 ml-2">
+                      {d.value}{d.value.length >= 80 ? '…' : ''}
+                    </span>
+                  </div>
+                  <div className="flex gap-2 pl-2">
+                    {d.indexes.map(idx => (
+                      <button
+                        key={idx}
+                        onClick={() => removeQuestion(idx)}
+                        className="text-[11px] font-mono px-2 py-0.5 rounded border border-accent2/30
+                                   text-accent2/70 hover:bg-accent2/15 hover:text-accent2 hover:border-accent2/60
+                                   transition-all"
+                      >
+                        remover Q{idx + 1}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
 
       <button
         onClick={() => setStep(3)}

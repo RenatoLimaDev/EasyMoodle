@@ -1,24 +1,328 @@
 import { useRef, useState, DragEvent } from 'react'
 import { useStore } from '@/store'
-import { extractText } from '@/lib/extractor'
-import { parseText } from '@/lib/parser'
+import { extractText, extractXmlQuestions } from '@/lib/extractor'
+import { parseText, findDuplicates, findCrossDuplicates } from '@/lib/parser'
+import type { Question } from '@/types'
 
+// ── Suggestion Modal ───────────────────────────────────────────────────────
+const LIMIT = 45 // stay under Formspree's 50/month
+
+function getSentCount(): number {
+  const key = `sq_${new Date().getFullYear()}_${new Date().getMonth()}`
+  return parseInt(localStorage.getItem(key) || '0', 10)
+}
+
+function incrementSentCount() {
+  const key = `sq_${new Date().getFullYear()}_${new Date().getMonth()}`
+  localStorage.setItem(key, String(getSentCount() + 1))
+}
+
+function SuggestionModal({ onClose }: { onClose: () => void }) {
+  const [msg,     setMsg]     = useState('')
+  const [email,   setEmail]   = useState('')
+  const [status,  setStatus]  = useState<'idle' | 'sending' | 'ok' | 'error'>('idle')
+  const sentCount = getSentCount()
+  const limitReached = sentCount >= LIMIT
+
+  const [errorMsg, setErrorMsg] = useState('')
+
+  const send = async () => {
+    if (!msg.trim()) return
+    setStatus('sending')
+    setErrorMsg('')
+    try {
+      const res = await fetch('https://formspree.io/f/mbdzeqke', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ message: msg, _replyto: email || undefined }),
+      })
+      if (res.ok) {
+        incrementSentCount()
+        setStatus('ok')
+      } else {
+        const data = await res.json().catch(() => ({}))
+        setErrorMsg(data?.error || `Erro ${res.status}`)
+        setStatus('error')
+      }
+    } catch (e) {
+      setErrorMsg(e instanceof Error ? e.message : 'Sem conexão.')
+      setStatus('error')
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4"
+         style={{ backgroundColor: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}
+         onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="w-full max-w-md bg-surface border border-border rounded-2xl p-6 space-y-4 shadow-2xl">
+
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-bold text-base">💡 Sugerir funcionalidade</h2>
+            <p className="text-xs text-white/30 font-mono mt-0.5">Sua ideia pode virar uma feature</p>
+          </div>
+          <button onClick={onClose}
+            className="text-white/30 hover:text-white transition-colors text-lg leading-none">✕</button>
+        </div>
+
+        {status === 'ok' ? (
+          <div className="text-center py-6 space-y-2">
+            <div className="text-3xl">✅</div>
+            <p className="text-accent font-bold">Sugestão enviada!</p>
+            <p className="text-xs text-white/30 font-mono">Obrigado pelo feedback.</p>
+            <button onClick={onClose} className="btn-secondary mt-4 text-xs px-6">Fechar</button>
+          </div>
+        ) : limitReached ? (
+          <div className="text-center py-6 space-y-2">
+            <div className="text-3xl">🚫</div>
+            <p className="text-accent3 font-bold text-sm">Limite mensal atingido</p>
+            <p className="text-xs text-white/30 font-mono">As sugestões reabrem no próximo mês.</p>
+            <button onClick={onClose} className="btn-secondary mt-4 text-xs px-6">Fechar</button>
+          </div>
+        ) : (
+          <>
+            <div className="space-y-3">
+              <div>
+                <label className="label">Sua sugestão</label>
+                <textarea
+                  value={msg}
+                  onChange={e => setMsg(e.target.value)}
+                  className="input min-h-[100px] resize-none"
+                  placeholder="Descreva a funcionalidade que gostaria de ver..."
+                  disabled={status === 'sending'}
+                />
+              </div>
+              <div>
+                <label className="label">Email para contato <span className="text-white/20 normal-case tracking-normal">(opcional)</span></label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  className="input"
+                  placeholder="seu@email.com"
+                  disabled={status === 'sending'}
+                />
+              </div>
+            </div>
+
+            {status === 'error' && (
+              <p className="text-accent2 text-xs font-mono">Erro ao enviar: {errorMsg || 'tente novamente.'}</p>
+            )}
+
+            <div className="flex gap-2 pt-1">
+              <button onClick={onClose} className="btn-secondary flex-1 text-sm">Cancelar</button>
+              <button onClick={send} disabled={!msg.trim() || status === 'sending'}
+                className="btn-primary flex-1 text-sm">
+                {status === 'sending' ? 'Enviando…' : 'Enviar'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Duplicate Checker ──────────────────────────────────────────────────────
+function CheckDuplicates() {
+  const qFileRef = useRef<HTMLInputElement>(null)
+  const xmlRef   = useRef<HTMLInputElement>(null)
+
+  const [qFilename,   setQFilename]   = useState('')
+  const [xmlFilename, setXmlFilename] = useState('')
+  const [perguntas,   setPerguntas]   = useState<Question[]>([])
+  const [refQs,       setRefQs]       = useState<Array<{ name: string; texto: string }>>([])
+  const [loading,     setLoading]     = useState(false)
+  const [error,       setError]       = useState('')
+
+  const loadQuestions = async (file: File) => {
+    setError('')
+    setLoading(true)
+    try {
+      const texto = await extractText(file)
+      const { perguntas: qs } = parseText(texto)
+      setPerguntas(qs)
+      setQFilename(file.name)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erro ao ler arquivo.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const loadXml = async (file: File) => {
+    setError('')
+    try {
+      const text = await file.text()
+      const qs = extractXmlQuestions(text)
+      if (qs.length === 0) { setError('Nenhuma questão encontrada no XML.'); return }
+      setRefQs(qs)
+      setXmlFilename(file.name)
+    } catch {
+      setError('Erro ao ler o arquivo XML.')
+    }
+  }
+
+  const internal    = findDuplicates(perguntas)
+  const cross       = findCrossDuplicates(perguntas, refQs)
+  const totalIssues = internal.length + cross.length
+  const removeQ     = (idx: number) => setPerguntas(prev => prev.filter((_, i) => i !== idx))
+
+  return (
+    <div className="space-y-4">
+      {/* Upload questões */}
+      <div>
+        <div className="text-[11px] font-mono uppercase tracking-widest text-white/30 mb-2">
+          Arquivo de questões
+        </div>
+        <div
+          className="border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all
+                     border-border bg-surface hover:border-accent/50 hover:bg-accent/10"
+          onClick={() => qFileRef.current?.click()}
+        >
+          <input ref={qFileRef} type="file" accept=".docx,.odt,.txt,.md,.rtf,.xml" className="hidden"
+            onChange={e => e.target.files?.[0] && loadQuestions(e.target.files[0])} />
+          {loading ? (
+            <div className="text-white/40 text-sm font-mono">Lendo…</div>
+          ) : qFilename ? (
+            <div className="font-mono text-sm text-accent">
+              {qFilename}
+              {perguntas.length > 0 && <span className="text-white/30 ml-2">— {perguntas.length} questões</span>}
+            </div>
+          ) : (
+            <>
+              <div className="text-2xl mb-2">📄</div>
+              <div className="text-sm text-white/50">Questões a verificar</div>
+              <div className="text-xs text-white/25 mt-1">.docx · .odt · .txt · .md · .rtf · .xml</div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Upload XML referência */}
+      <div>
+        <div className="text-[11px] font-mono uppercase tracking-widest text-white/30 mb-2">
+          Banco Moodle <span className="text-white/20 normal-case tracking-normal font-sans">(opcional)</span>
+        </div>
+        <div
+          className="border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all
+                     border-accent4/30 hover:border-accent4/60 hover:bg-accent4/5"
+          onClick={() => xmlRef.current?.click()}
+        >
+          <input ref={xmlRef} type="file" accept=".xml" className="hidden"
+            onChange={e => e.target.files?.[0] && loadXml(e.target.files[0])} />
+          {xmlFilename ? (
+            <div className="font-mono text-sm text-accent4">
+              {xmlFilename}
+              <span className="text-white/30 ml-2">— {refQs.length} questões no banco</span>
+            </div>
+          ) : (
+            <>
+              <div className="text-2xl mb-2">🗄️</div>
+              <div className="text-sm text-accent4/50">XML exportado do Moodle</div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {error && (
+        <div className="text-accent2 text-xs font-mono bg-accent2/10 border border-accent2/30 rounded-lg px-4 py-3">
+          {error}
+        </div>
+      )}
+
+      {/* Results */}
+      {perguntas.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-3 font-mono text-xs flex-wrap">
+            <span className="text-accent">{perguntas.length} questões carregadas</span>
+            {refQs.length > 0 && <span className="text-accent4">{refQs.length} no banco</span>}
+            <span className={totalIssues > 0 ? 'text-accent2' : 'text-accent'}>
+              {totalIssues > 0 ? `⚠️ ${totalIssues} problema(s)` : '✅ Sem duplicatas'}
+            </span>
+          </div>
+
+          {internal.length > 0 && (
+            <div className="card border-l-4 border-l-accent2 space-y-3">
+              <div className="text-[11px] font-mono uppercase tracking-widest text-accent2">
+                ⚠️ {internal.length} duplicata(s) no arquivo
+              </div>
+              {internal.map((d, i) => (
+                <div key={i} className="space-y-1">
+                  <div className="text-xs font-mono text-white/50">
+                    <span className="text-accent3">{d.type === 'code' ? '🔑 Código' : '📄 Texto'} igual</span>
+                    <span className="text-white/30 mx-1">—</span>
+                    <span className="text-accent2">Q{d.indexes.map(j => j + 1).join(' e Q')}</span>
+                    <span className="text-white/20 block pl-4 truncate">{d.value}{d.value.length >= 80 ? '…' : ''}</span>
+                  </div>
+                  <div className="flex gap-2 pl-2">
+                    {d.indexes.map(idx => (
+                      <button key={idx} onClick={() => removeQ(idx)}
+                        className="text-[11px] font-mono px-2 py-0.5 rounded border border-accent2/30
+                                   text-accent2/70 hover:bg-accent2/15 hover:text-accent2 transition-all">
+                        remover Q{idx + 1}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {refQs.length > 0 && (
+            <div className="card border-l-4 border-l-accent4 space-y-3">
+              <div className="text-[11px] font-mono uppercase tracking-widest text-accent4">
+                {cross.length === 0
+                  ? '✅ Sem duplicatas com o banco'
+                  : `⚠️ ${cross.length} já existe${cross.length === 1 ? '' : 'm'} no banco`}
+              </div>
+              {cross.map((d, i) => (
+                <div key={i} className="space-y-1">
+                  <div className="text-xs font-mono text-white/50">
+                    <span className="text-accent3">{d.type === 'code' ? '🔑 Código' : '📄 Texto'} igual</span>
+                    <span className="text-white/30 mx-1">—</span>
+                    <span className="text-accent2">Q{d.newIdx + 1}</span>
+                    {d.refName && <span className="text-white/25 ml-1">↔ {d.refName}</span>}
+                    <span className="text-white/20 block pl-4 truncate">
+                      {d.refTexto.slice(0, 80)}{d.refTexto.length > 80 ? '…' : ''}
+                    </span>
+                  </div>
+                  <button onClick={() => removeQ(d.newIdx)}
+                    className="text-[11px] font-mono px-2 py-0.5 rounded border border-accent2/30
+                               text-accent2/70 hover:bg-accent2/15 hover:text-accent2 transition-all">
+                    remover Q{d.newIdx + 1}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {internal.length === 0 && refQs.length === 0 && (
+            <p className="text-accent text-xs font-mono">✅ Nenhuma duplicata interna encontrada.</p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Main StepImport ────────────────────────────────────────────────────────
 export function StepImport() {
   const setStep    = useStore(s => s.setStep)
   const setRawText = useStore(s => s.setRawText)
   const setParsed  = useStore(s => s.setParsed)
 
-  const fileRef    = useRef<HTMLInputElement>(null)
-  const [filename, setFilename] = useState('')
-  const [paste, setPaste]       = useState('')
-  const [dragging, setDragging] = useState(false)
-  const [loading, setLoading]   = useState(false)
-  const [error, setError]       = useState('')
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [filename,  setFilename]  = useState('')
+  const [paste,     setPaste]     = useState('')
+  const [dragging,  setDragging]  = useState(false)
+  const [loading,   setLoading]   = useState(false)
+  const [error,     setError]     = useState('')
+  const [showPaste,   setShowPaste]   = useState(false)
+  const [mode,        setMode]        = useState<'convert' | 'check'>('convert')
+  const [showSuggest, setShowSuggest] = useState(false)
 
-  const handleFile = async (file: File) => {
-    setFilename(file.name)
-    setError('')
-  }
+  const handleFile = (file: File) => { setFilename(file.name); setError('') }
 
   const proceed = async () => {
     setLoading(true)
@@ -29,7 +333,6 @@ export function StepImport() {
         texto = await extractText(fileRef.current.files[0])
       }
       if (!texto) { setError('Selecione um arquivo ou cole algum texto.'); return }
-
       setRawText(texto)
       const { perguntas, avisos } = parseText(texto)
       setParsed(perguntas, avisos)
@@ -56,69 +359,108 @@ export function StepImport() {
 
   return (
     <div className="space-y-5">
-      {/* Drop zone */}
-      <div
-        className={`relative border-2 border-dashed rounded-xl p-12 text-center cursor-pointer
-          transition-all duration-200
-          ${dragging ? 'border-accent bg-accent/5' : 'border-border bg-surface hover:border-accent/50'}`}
-        onDragOver={e => { e.preventDefault(); setDragging(true) }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={onDrop}
-        onClick={() => fileRef.current?.click()}
-      >
-        <input
-          ref={fileRef}
-          type="file"
-          accept=".docx,.odt,.txt,.md,.rtf"
-          className="hidden"
-          onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])}
-        />
-        <div className="text-4xl mb-3">📄</div>
-        <div className="font-semibold text-lg mb-1">
-          Arraste o arquivo ou clique para selecionar
-        </div>
-        <div className="text-white/40 text-sm">
-          Suporta .docx · .odt · .txt · .md · .rtf
-        </div>
-        {filename && (
-          <div className="mt-3 font-mono text-sm text-accent">✓ {filename}</div>
-        )}
-      </div>
-
-      {/* Format pills */}
-      <div className="flex gap-2 flex-wrap">
-        {['.docx', '.odt', '.txt', '.md', '.rtf'].map(f => (
-          <span key={f} className="font-mono text-[11px] px-3 py-1 rounded-full border border-border text-white/40">
-            {f}
-          </span>
+      {/* Mode tabs */}
+      <div className="flex gap-1 p-1 bg-surface rounded-xl border border-border">
+        {([
+          { v: 'convert', label: '⚡ Converter'            },
+          { v: 'check',   label: '🔍 Verificar Duplicatas' },
+        ] as const).map(({ v, label }) => (
+          <button key={v} onClick={() => setMode(v)}
+            className={`flex-1 py-2 px-3 rounded-lg text-xs font-mono font-bold transition-all
+              ${mode === v
+                ? 'bg-surface2 text-white border border-border'
+                : 'text-white/30 hover:text-white/60'}`}>
+            {label}
+          </button>
         ))}
       </div>
 
-      {/* Divider */}
-      <div className="relative text-center">
-        <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-border" />
-        </div>
-        <span className="relative bg-bg px-3 font-mono text-xs text-white/30 tracking-widest">OU</span>
-      </div>
+      {mode === 'check' ? <CheckDuplicates /> : (
+        <>
+          {/* Drop zone */}
+          <div
+            className={`relative border-2 border-dashed rounded-xl p-12 text-center cursor-pointer overflow-hidden
+              transition-all duration-200
+              ${dragging ? 'border-accent' : 'border-border bg-surface hover:border-accent/50 hover:bg-accent/10'}`}
+            style={dragging ? { backgroundColor: 'rgba(79,255,176,0.15)', transform: 'scale(1.01)' } : {}}
+            onDragOver={e => { e.preventDefault(); setDragging(true) }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={onDrop}
+            onClick={() => fileRef.current?.click()}
+          >
+            <input ref={fileRef} type="file" accept=".docx,.odt,.txt,.md,.rtf" className="hidden"
+              onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
+            <div className="text-4xl mb-3">📄</div>
+            <div className="font-semibold text-lg mb-1">Arraste o arquivo ou clique para selecionar</div>
+            <div className="text-white/40 text-sm">Suporta .docx · .odt · .txt · .md · .rtf</div>
+            {filename && <div className="mt-3 font-mono text-sm text-accent">✓ {filename}</div>}
+          </div>
 
-      {/* Paste area */}
-      <textarea
-        value={paste}
-        onChange={e => setPaste(e.target.value)}
-        className="input min-h-[120px] resize-y leading-7"
-        placeholder="Cole o texto aqui diretamente..."
-      />
+          {/* Format pills + suggest button */}
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex gap-2 flex-wrap">
+              {['.docx', '.odt', '.txt', '.md', '.rtf'].map(f => (
+                <span key={f} className="font-mono text-[11px] px-3 py-1 rounded-full border border-border text-white/40">
+                  {f}
+                </span>
+              ))}
+            </div>
+            <button
+              onClick={() => setShowSuggest(true)}
+              className="flex items-center gap-1.5 font-mono text-[11px] px-3 py-1 rounded-full
+                         border border-border text-white/25
+                         hover:border-accent/50 hover:text-accent transition-colors duration-200"
+            >
+              💡 Sugerir funcionalidade
+            </button>
+          </div>
 
-      {error && (
-        <div className="text-accent2 text-sm font-mono bg-accent2/10 border border-accent2/30 rounded-lg px-4 py-3">
-          {error}
-        </div>
+          {/* Paste panel */}
+          <div className="rounded-xl border border-border overflow-hidden">
+            <button onClick={() => setShowPaste(v => !v)}
+              className="w-full flex items-center justify-between px-4 py-3 bg-transparent
+                         hover:bg-white/5 transition-colors text-left">
+              <div className="flex items-center gap-2 text-xs font-mono text-white/40">
+                <span>✏️</span>
+                <span>Colar texto diretamente</span>
+              </div>
+              <span className="text-white/30 text-xs font-mono"
+                    style={{ display: 'inline-block', transform: showPaste ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                ▾
+              </span>
+            </button>
+            {showPaste && (
+              <div className="border-t border-border">
+                <textarea value={paste} onChange={e => setPaste(e.target.value)}
+                  className="input min-h-40 resize-y leading-7 rounded-none border-0 focus:ring-0"
+                  style={{ borderRadius: 0, border: 'none', outline: 'none', background: 'transparent' }}
+                  placeholder="Cole o texto das questões aqui..." autoFocus />
+                {paste && (
+                  <div className="flex items-center justify-between px-4 py-2 bg-transparent border-t border-border">
+                    <span className="font-mono text-[11px] text-white/25">{paste.length} caracteres</span>
+                    <button onClick={() => setPaste('')}
+                      className="font-mono text-[11px] text-white/30 hover:text-accent2 transition-colors">
+                      limpar ✕
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {error && (
+            <div className="text-accent2 text-sm font-mono bg-accent2/10 border border-accent2/30 rounded-lg px-4 py-3">
+              {error}
+            </div>
+          )}
+
+          <button onClick={proceed} disabled={loading} className="btn-primary w-full text-base">
+            {loading ? 'Lendo...' : 'Extrair texto e revisar →'}
+          </button>
+        </>
       )}
 
-      <button onClick={proceed} disabled={loading} className="btn-primary w-full text-base">
-        {loading ? 'Lendo...' : 'Extrair texto e revisar →'}
-      </button>
+      {showSuggest && <SuggestionModal onClose={() => setShowSuggest(false)} />}
     </div>
   )
 }

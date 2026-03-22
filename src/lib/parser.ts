@@ -152,6 +152,76 @@ export function inferTemplate(code: string): string {
   return code.replace(/[Qq](\d+)$/, 'Q{n}')
 }
 
+export interface Duplicate {
+  indexes: number[]   // 0-based indexes of duplicated questions
+  type: 'text' | 'code'
+  value: string
+}
+
+export function findDuplicates(perguntas: Question[]): Duplicate[] {
+  const duplicates: Duplicate[] = []
+
+  // By normalized text
+  const textMap = new Map<string, number[]>()
+  perguntas.forEach((p, i) => {
+    const key = p.texto.toLowerCase().replace(/\s+/g, ' ').trim()
+    if (!key) return
+    const arr = textMap.get(key) ?? []
+    arr.push(i)
+    textMap.set(key, arr)
+  })
+  textMap.forEach((idxs, key) => {
+    if (idxs.length > 1) duplicates.push({ indexes: idxs, type: 'text', value: key.slice(0, 80) })
+  })
+
+  // By codigoQ
+  const codeMap = new Map<string, number[]>()
+  perguntas.forEach((p, i) => {
+    if (!p.codigoQ) return
+    const arr = codeMap.get(p.codigoQ) ?? []
+    arr.push(i)
+    codeMap.set(p.codigoQ, arr)
+  })
+  codeMap.forEach((idxs, code) => {
+    if (idxs.length > 1) duplicates.push({ indexes: idxs, type: 'code', value: code })
+  })
+
+  return duplicates
+}
+
+export interface CrossDuplicate {
+  newIdx: number
+  refName: string
+  refTexto: string
+  type: 'text' | 'code'
+}
+
+export function findCrossDuplicates(
+  perguntas: Question[],
+  refs: Array<{ name: string; texto: string }>
+): CrossDuplicate[] {
+  const result: CrossDuplicate[] = []
+
+  for (let i = 0; i < perguntas.length; i++) {
+    const p = perguntas[i]
+    const pText = p.texto.toLowerCase().replace(/\s+/g, ' ').trim()
+
+    for (const ref of refs) {
+      if (p.codigoQ && ref.name && p.codigoQ === ref.name) {
+        result.push({ newIdx: i, refName: ref.name, refTexto: ref.texto, type: 'code' })
+        break
+      }
+      const refText = ref.texto.toLowerCase().replace(/\s+/g, ' ').trim()
+      if (pText && refText && pText === refText) {
+        result.push({ newIdx: i, refName: ref.name, refTexto: ref.texto, type: 'text' })
+        break
+      }
+    }
+  }
+
+  return result
+}
+
 export function groupByUnit(perguntas: Question[]): Array<{ unitKey: string; questions: Question[] }> {
   const map = new Map<string, Question[]>()
   const order: string[] = []

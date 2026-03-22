@@ -25,6 +25,12 @@
     background-size: 40px 40px;
   }
   * { box-sizing: border-box; }
+
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--color-surface); }
+  ::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #3a4060; }
+  ::-webkit-resizer { background: var(--color-surface2); }
 }
 
 @layer components {

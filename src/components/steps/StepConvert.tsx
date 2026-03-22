@@ -25,14 +25,18 @@ export function StepConvert() {
     setUnits:           s.setUnits,
   }))
 
-  const [profiles, setProfiles] = useState<Profile[]>([])
-  const [loading, setLoading]   = useState(false)
-  const [avisos, setAvisos]     = useState<string[]>([])
-  const [done, setDone]         = useState(false)
-  const [offsets, setOffsets]   = useState<Record<string, number>>({})
+  const [profiles,       setProfiles]       = useState<Profile[]>([])
+  const [loading,        setLoading]        = useState(false)
+  const [avisos,         setAvisos]         = useState<string[]>([])
+  const [done,           setDone]           = useState(false)
+  const [offsets,        setOffsets]        = useState<Record<string, number>>({})
+  const [showSaveModal,  setShowSaveModal]  = useState(false)
+  const [profileName,    setProfileName]    = useState('')
 
-  const unitGroups = groupByUnit(perguntas)
-  const multiUnit  = unitGroups.length > 1
+  const unitGroups   = groupByUnit(perguntas)
+  const multiUnit    = unitGroups.length > 1
+  const hasExplicitCodes = perguntas.length > 0 &&
+    perguntas.filter(p => p.codigoQ).length >= perguntas.length / 2
 
   // Parse unitKey into uz and mod
   // unitKey is always "P1", "P2"... (grouped by percurso number)
@@ -75,10 +79,16 @@ export function StepConvert() {
   }, [segments, unitGroups.length])
 
   const handleSaveProfile = () => {
-    const name = prompt('Nome do perfil (ex: Programação 2025.1):')
-    if (!name?.trim()) return
-    saveProfile(name.trim(), segments, options)
+    setProfileName('')
+    setShowSaveModal(true)
+  }
+
+  const confirmSaveProfile = () => {
+    if (!profileName.trim()) return
+    saveProfile(profileName.trim(), segments, options)
     setProfiles(readProfiles())
+    setShowSaveModal(false)
+    setProfileName('')
   }
 
   const handleLoadProfile = (p: Profile) => {
@@ -175,7 +185,7 @@ export function StepConvert() {
       </div>
 
       {/* Code builder */}
-      <div className="card border-l-4 border-l-accent4 space-y-4">
+      {!hasExplicitCodes && (<div className="card border-l-4 border-l-accent4 space-y-4">
         <h3 className="font-bold text-accent4 text-sm">🏷️ Código da questão</h3>
 
         {/* Global fields */}
@@ -242,7 +252,7 @@ export function StepConvert() {
             ))}
           </div>
         )}
-      </div>
+      </div>)}
 
       {/* Options */}
       <div className="grid grid-cols-2 gap-3">
@@ -446,6 +456,38 @@ export function StepConvert() {
               ⬇️ Baixar quiz.xml
             </button>
           )}
+        </div>
+      )}
+
+      {/* Save profile modal */}
+      {showSaveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4"
+             style={{ backgroundColor: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}
+             onClick={e => e.target === e.currentTarget && setShowSaveModal(false)}>
+          <div className="w-full max-w-sm bg-surface border border-border rounded-2xl p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <h2 className="font-bold text-base">💾 Salvar perfil</h2>
+              <button onClick={() => setShowSaveModal(false)}
+                className="text-white/30 hover:text-white transition-colors text-lg leading-none">✕</button>
+            </div>
+            <div>
+              <label className="label">Nome do perfil</label>
+              <input
+                className="input"
+                placeholder="ex: Programação 2025.1"
+                value={profileName}
+                onChange={e => setProfileName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && confirmSaveProfile()}
+                autoFocus
+              />
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setShowSaveModal(false)} className="btn-secondary flex-1 text-sm">Cancelar</button>
+              <button onClick={confirmSaveProfile} disabled={!profileName.trim()} className="btn-primary flex-1 text-sm">
+                Salvar
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

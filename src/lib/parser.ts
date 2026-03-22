@@ -57,8 +57,20 @@ export function parseText(texto: string): ParseResult {
       } else if (percSimpleMatch) {
         unitKey = `P${percSimpleMatch[1]}`
       } else {
-        const uzMatch = codigoQ.match(/\.(U\d+)\./i)
-        unitKey = uzMatch ? uzMatch[1].toUpperCase() : null
+        // Try to extract unit+module from partial code formats:
+        // "U1.2.O.Q1" (no prod.ano prefix) or "001.261.U1.2.O.Q1" (full code)
+        const partialUzMod = codigoQ.match(/^[Uu](\d+)\.(\d+)/)
+        const fullUzMod    = codigoQ.match(/\d+\.\d+\.[Uu](\d+)\.(\d+)/i)
+        if (partialUzMod) {
+          unitKey     = `U${partialUzMod[1]}`
+          percursoMod = partialUzMod[2]
+        } else if (fullUzMod) {
+          unitKey     = `U${fullUzMod[1]}`
+          percursoMod = fullUzMod[2]
+        } else {
+          const uzMatch = codigoQ.match(/\.(U\d+)\./i)
+          unitKey = uzMatch ? uzMatch[1].toUpperCase() : null
+        }
       }
 
       const numMatch = l.match(/^Quest[aã]o\s+(\d+)/i)
@@ -222,13 +234,26 @@ export function findCrossDuplicates(
   return result
 }
 
+function unitSortKey(key: string): number {
+  const m = key.match(/\d+/)
+  return m ? parseInt(m[0]) : Infinity
+}
+
+// Normalize "P1", "U1", "1" → "1"; "P?" stays "P?"
+function normalizeUnitKey(raw: string): string {
+  if (raw === 'P?') return 'P?'
+  const m = raw.match(/\d+/)
+  return m ? m[0] : raw
+}
+
 export function groupByUnit(perguntas: Question[]): Array<{ unitKey: string; questions: Question[] }> {
   const map = new Map<string, Question[]>()
-  const order: string[] = []
   for (const p of perguntas) {
-    const k = p.unitKey ?? 'P?'
-    if (!map.has(k)) { map.set(k, []); order.push(k) }
+    const k = normalizeUnitKey(p.unitKey ?? 'P?')
+    if (!map.has(k)) map.set(k, [])
     map.get(k)!.push(p)
   }
-  return order.map(k => ({ unitKey: k, questions: map.get(k)! }))
+  return [...map.keys()]
+    .sort((a, b) => unitSortKey(a) - unitSortKey(b))
+    .map(k => ({ unitKey: k, questions: map.get(k)! }))
 }

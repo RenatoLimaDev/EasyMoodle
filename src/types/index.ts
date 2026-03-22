@@ -16,6 +16,7 @@ export interface Question {
   feedbackGeral: string
   linha: number
   formato: 'A' | 'B'
+  questionType?: 'multichoice' | 'essay'
 }
 
 export interface ParseResult {
@@ -38,6 +39,7 @@ export interface ConvertOptions {
   qmode: QMode
   unitOffsets: Record<string, number>
   unitTemplates: Record<string, string>  // per-unit code template override
+  segments?: CodeSegments               // passed for per-question module resolution
 }
 
 export interface CodeSegments {
@@ -63,4 +65,4 @@ export interface UnitGroup {
   xml: string
 }
 
-export type Step = 1 | 2 | 3
+export type Step = 1 | 2

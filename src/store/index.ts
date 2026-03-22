@@ -48,7 +48,7 @@ const DEFAULT_OPTIONS: ConvertOptions = {
 }
 
 const DEFAULT_SEGMENTS: CodeSegments = {
-  prod: '', ano: '', unit: '', mod: '', tipo: 'O'
+  prod: '', ano: '', unit: '', mod: '1', tipo: 'O'
 }
 
 export const useStore = create<AppState>((set) => ({

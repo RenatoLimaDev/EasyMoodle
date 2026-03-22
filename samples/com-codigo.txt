@@ -1,0 +1,48 @@
+Questão 1 (001.261.U1.1.O.Q1)
+O modelo de desenvolvimento ágil que divide o trabalho em sprints é chamado de:
+A) Cascata
+B) RUP
+C) Scrum *
+D) XP
+E) Kanban
+
+Questão 2 (001.261.U1.2.O.Q2)
+Qual das alternativas descreve corretamente o papel do Product Owner no Scrum?
+A) Facilitar as cerimônias do Scrum
+B) Desenvolver as funcionalidades do produto
+C) Testar o software ao final de cada sprint
+D) Priorizar o backlog do produto *
+E) Gerenciar a infraestrutura do projeto
+
+Questão 3 (001.261.U1.3.O.Q3)
+No contexto do Scrum, o evento onde a equipe planeja as atividades do próximo sprint é:
+A) Daily Scrum
+B) Sprint Review
+C) Sprint Retrospective
+D) Sprint Planning *
+E) Backlog Refinement
+
+Questão 4 (001.261.U2.1.O.Q1)
+O princípio SOLID que determina que uma classe deve ter apenas um motivo para mudar é:
+A) Open/Closed Principle
+B) Liskov Substitution
+C) Interface Segregation
+D) Dependency Inversion
+E) Single Responsibility *
+ANSWER: E; Feedback: SRP define que cada classe deve ter uma única responsabilidade.
+
+Questão 5 (001.261.U2.1.O.Q2)
+Qual padrão de projeto é usado para garantir que uma classe tenha apenas uma instância?
+A) Factory
+B) Observer
+C) Singleton *
+D) Strategy
+E) Decorator
+
+Questão 6 (001.261.U2.1.O.Q3)
+Qual padrão de projeto é usado para garantir que uma classe tenha apenas uma instância?
+A) Factory
+B) Observer
+C) Singleton *
+D) Strategy
+E) Decorator

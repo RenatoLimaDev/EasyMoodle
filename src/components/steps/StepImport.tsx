@@ -87,7 +87,7 @@ function SuggestionModal({ onClose }: { onClose: () => void }) {
                 <textarea
                   value={msg}
                   onChange={e => setMsg(e.target.value)}
-                  className="input min-h-[100px] resize-none"
+                  className="input min-h-25 resize-none"
                   placeholder="Descreva a funcionalidade que gostaria de ver..."
                   disabled={status === 'sending'}
                 />
@@ -125,6 +125,10 @@ function SuggestionModal({ onClose }: { onClose: () => void }) {
 
 // ── Duplicate Checker ──────────────────────────────────────────────────────
 function CheckDuplicates() {
+  const setStep    = useStore(s => s.setStep)
+  const setParsed  = useStore(s => s.setParsed)
+  const setRawText = useStore(s => s.setRawText)
+
   const qFileRef = useRef<HTMLInputElement>(null)
   const xmlRef   = useRef<HTMLInputElement>(null)
 
@@ -134,6 +138,9 @@ function CheckDuplicates() {
   const [refQs,       setRefQs]       = useState<Array<{ name: string; texto: string }>>([])
   const [loading,     setLoading]     = useState(false)
   const [error,       setError]       = useState('')
+  const [draggingQ,   setDraggingQ]   = useState(false)
+  const [draggingX,   setDraggingX]   = useState(false)
+  const [showPreview, setShowPreview] = useState(false)
 
   const loadQuestions = async (file: File) => {
     setError('')
@@ -143,6 +150,7 @@ function CheckDuplicates() {
       const { perguntas: qs } = parseText(texto)
       setPerguntas(qs)
       setQFilename(file.name)
+      setShowPreview(false)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Erro ao ler arquivo.')
     } finally {
@@ -168,81 +176,106 @@ function CheckDuplicates() {
   const totalIssues = internal.length + cross.length
   const removeQ     = (idx: number) => setPerguntas(prev => prev.filter((_, i) => i !== idx))
 
+  const duplicateIdxs = new Set([
+    ...internal.flatMap(d => d.indexes),
+    ...cross.map(d => d.newIdx),
+  ])
+
+  const proceedToConvert = () => {
+    setRawText('')
+    setParsed(perguntas, [])
+    setStep(2)
+  }
+
   return (
-    <div className="space-y-4">
-      {/* Upload questões */}
-      <div>
-        <div className="text-[11px] font-mono uppercase tracking-widest text-white/30 mb-2">
-          Arquivo de questões
-        </div>
-        <div
-          className="border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all
-                     border-border bg-surface hover:border-accent/50 hover:bg-accent/10"
-          onClick={() => qFileRef.current?.click()}
-        >
-          <input ref={qFileRef} type="file" accept=".docx,.odt,.txt,.md,.rtf,.xml" className="hidden"
-            onChange={e => e.target.files?.[0] && loadQuestions(e.target.files[0])} />
-          {loading ? (
-            <div className="text-white/40 text-sm font-mono">Lendo…</div>
-          ) : qFilename ? (
+    <div className="space-y-5">
+
+      {/* Dropzone principal — questões */}
+      <div
+        className={`relative border-2 border-dashed rounded-xl text-center cursor-pointer overflow-hidden
+          transition-all duration-200
+          ${qFilename ? 'py-3 px-4' : 'p-12'}
+          ${draggingQ ? 'border-accent' : 'border-border bg-surface hover:border-accent/50 hover:bg-accent/10'}`}
+        style={draggingQ ? { backgroundColor: 'rgba(79,255,176,0.15)' } : {}}
+        onClick={() => qFileRef.current?.click()}
+        onDragOver={e => { e.preventDefault(); setDraggingQ(true) }}
+        onDragLeave={() => setDraggingQ(false)}
+        onDrop={e => { e.preventDefault(); setDraggingQ(false); const f = e.dataTransfer.files[0]; if (f) loadQuestions(f) }}
+      >
+        <input ref={qFileRef} type="file" accept=".docx,.odt,.txt,.md,.rtf,.xml" className="hidden"
+          onChange={e => e.target.files?.[0] && loadQuestions(e.target.files[0])} />
+        {loading ? (
+          <div className="text-white/40 text-sm font-mono">Lendo…</div>
+        ) : qFilename ? (
+          <div className="flex items-center justify-between">
             <div className="font-mono text-sm text-accent">
-              {qFilename}
+              ✓ {qFilename}
               {perguntas.length > 0 && <span className="text-white/30 ml-2">— {perguntas.length} questões</span>}
             </div>
-          ) : (
-            <>
-              <div className="text-2xl mb-2">📄</div>
-              <div className="text-sm text-white/50">Questões a verificar</div>
-              <div className="text-xs text-white/25 mt-1">.docx · .odt · .txt · .md · .rtf · .xml</div>
-            </>
-          )}
-        </div>
+            <span className="text-[11px] font-mono text-white/25">trocar arquivo</span>
+          </div>
+        ) : (
+          <>
+            <div className="text-4xl mb-3">📄</div>
+            <div className="font-semibold text-lg mb-1">Arraste o arquivo ou clique para selecionar</div>
+            <div className="text-white/40 text-sm">Suporta .docx · .odt · .txt · .md · .rtf · .xml</div>
+          </>
+        )}
       </div>
 
-      {/* Upload XML referência */}
-      <div>
-        <div className="text-[11px] font-mono uppercase tracking-widest text-white/30 mb-2">
-          Banco Moodle <span className="text-white/20 normal-case tracking-normal font-sans">(opcional)</span>
+      {/* Format pills — só quando sem arquivo */}
+      {!qFilename && (
+        <div className="flex gap-2 flex-wrap">
+          {['.docx', '.odt', '.txt', '.md', '.rtf', '.xml'].map(f => (
+            <span key={f} className="font-mono text-[11px] px-3 py-1 rounded-full border border-border text-white/40">{f}</span>
+          ))}
         </div>
+      )}
+
+      {/* Banco Moodle XML — mesmo estilo do painel "Colar texto" */}
+      <div className="rounded-xl border border-border overflow-hidden">
         <div
-          className="border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all
-                     border-accent4/30 hover:border-accent4/60 hover:bg-accent4/5"
+          className={`flex items-center justify-between px-4 py-3 cursor-pointer transition-colors
+            ${draggingX ? 'bg-accent4/10' : 'hover:bg-white/5'}`}
           onClick={() => xmlRef.current?.click()}
+          onDragOver={e => { e.preventDefault(); setDraggingX(true) }}
+          onDragLeave={() => setDraggingX(false)}
+          onDrop={e => { e.preventDefault(); setDraggingX(false); const f = e.dataTransfer.files[0]; if (f) loadXml(f) }}
         >
           <input ref={xmlRef} type="file" accept=".xml" className="hidden"
             onChange={e => e.target.files?.[0] && loadXml(e.target.files[0])} />
-          {xmlFilename ? (
-            <div className="font-mono text-sm text-accent4">
-              {xmlFilename}
-              <span className="text-white/30 ml-2">— {refQs.length} questões no banco</span>
-            </div>
-          ) : (
-            <>
-              <div className="text-2xl mb-2">🗄️</div>
-              <div className="text-sm text-accent4/50">XML exportado do Moodle</div>
-            </>
-          )}
+          <div className="flex items-center gap-2 text-xs font-mono text-white/40">
+            <span>🗄️</span>
+            {xmlFilename
+              ? <span className="text-accent4">✓ {xmlFilename} <span className="text-white/30">— {refQs.length} questões no banco</span></span>
+              : <span>Banco Moodle XML <span className="text-white/20">(opcional)</span></span>
+            }
+          </div>
+          <span className="text-white/25 text-xs font-mono">arrastar ou clicar</span>
         </div>
       </div>
 
       {error && (
-        <div className="text-accent2 text-xs font-mono bg-accent2/10 border border-accent2/30 rounded-lg px-4 py-3">
+        <div className="text-accent2 text-sm font-mono bg-accent2/10 border border-accent2/30 rounded-lg px-4 py-3">
           {error}
         </div>
       )}
 
-      {/* Results */}
+      {/* Resultados + preview + botão converter */}
       {perguntas.length > 0 && (
         <div className="space-y-3">
-          <div className="flex items-center gap-3 font-mono text-xs flex-wrap">
-            <span className="text-accent">{perguntas.length} questões carregadas</span>
+
+          {/* Status bar */}
+          <div className="flex items-center gap-3 font-mono text-xs flex-wrap px-1">
+            <span className="text-accent">{perguntas.length} questões</span>
             {refQs.length > 0 && <span className="text-accent4">{refQs.length} no banco</span>}
             <span className={totalIssues > 0 ? 'text-accent2' : 'text-accent'}>
               {totalIssues > 0 ? `⚠️ ${totalIssues} problema(s)` : '✅ Sem duplicatas'}
             </span>
           </div>
 
-          {internal.length > 0 && (
+          {/* Duplicatas internas */}
+          {!showPreview && internal.length > 0 && (
             <div className="card border-l-4 border-l-accent2 space-y-3">
               <div className="text-[11px] font-mono uppercase tracking-widest text-accent2">
                 ⚠️ {internal.length} duplicata(s) no arquivo
@@ -269,7 +302,8 @@ function CheckDuplicates() {
             </div>
           )}
 
-          {refQs.length > 0 && (
+          {/* Duplicatas com banco */}
+          {!showPreview && refQs.length > 0 && (
             <div className="card border-l-4 border-l-accent4 space-y-3">
               <div className="text-[11px] font-mono uppercase tracking-widest text-accent4">
                 {cross.length === 0
@@ -297,9 +331,44 @@ function CheckDuplicates() {
             </div>
           )}
 
-          {internal.length === 0 && refQs.length === 0 && (
-            <p className="text-accent text-xs font-mono">✅ Nenhuma duplicata interna encontrada.</p>
-          )}
+          {/* Preview das questões — mesmo estilo do painel "Colar texto" */}
+          <div className="rounded-xl border border-border overflow-hidden">
+            <button
+              onClick={() => setShowPreview(v => !v)}
+              className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 transition-colors text-left"
+            >
+              <div className="flex items-center gap-2 text-xs font-mono text-white/40">
+                <span>{showPreview ? '▼' : '▶'}</span>
+                <span>Preview das questões</span>
+              </div>
+              <span className={`text-[11px] font-mono ${duplicateIdxs.size > 0 ? 'text-accent2' : 'text-white/25'}`}>
+                {duplicateIdxs.size > 0 ? `${duplicateIdxs.size} marcadas` : `${perguntas.length} questões`}
+              </span>
+            </button>
+            {showPreview && (
+              <div className="border-t border-border divide-y divide-border/50 max-h-64 overflow-y-auto">
+                {perguntas.map((p, i) => (
+                  <div key={i} className={`flex items-center gap-3 px-4 py-2.5 ${duplicateIdxs.has(i) ? 'bg-accent2/5' : ''}`}>
+                    <span className={`text-[10px] font-mono font-bold shrink-0 w-8 ${duplicateIdxs.has(i) ? 'text-accent2' : 'text-accent/40'}`}>
+                      Q{i + 1}
+                    </span>
+                    <span className="text-xs font-mono text-white/45 flex-1 min-w-0 truncate">
+                      {p.texto || <span className="text-white/20 italic">sem enunciado</span>}
+                    </span>
+                    {duplicateIdxs.has(i) && (
+                      <span className="text-[10px] font-mono text-accent2 shrink-0">⚠️</span>
+                    )}
+                    <button onClick={() => removeQ(i)} className="text-white/20 hover:text-accent2 transition-colors text-xs shrink-0">✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Botão converter */}
+          <button onClick={proceedToConvert} className="btn-primary w-full text-base">
+            {totalIssues > 0 ? `⚡ Converter ${perguntas.length} questões limpas →` : `⚡ Converter ${perguntas.length} questões →`}
+          </button>
         </div>
       )}
     </div>
@@ -358,15 +427,16 @@ export function StepImport() {
   }
 
   return (
+    <div className="h-full overflow-y-auto pr-0.5">
     <div className="space-y-5">
       {/* Mode tabs */}
       <div className="flex gap-1 p-1 bg-surface rounded-xl border border-border">
         {([
           { v: 'convert', label: '⚡ Converter'            },
-          { v: 'check',   label: '🔍 Verificar Duplicatas' },
+          { v: 'check',   label: '🔍 Verificar Duplicadas' },
         ] as const).map(({ v, label }) => (
           <button key={v} onClick={() => setMode(v)}
-            className={`flex-1 py-2 px-3 rounded-lg text-xs font-mono font-bold transition-all
+            className={`flex-1 py-2 px-3 rounded-lg text-[16px] font-mono font-bold transition-all
               ${mode === v
                 ? 'bg-surface2 text-white border border-border'
                 : 'text-white/30 hover:text-white/60'}`}>
@@ -382,7 +452,7 @@ export function StepImport() {
             className={`relative border-2 border-dashed rounded-xl p-12 text-center cursor-pointer overflow-hidden
               transition-all duration-200
               ${dragging ? 'border-accent' : 'border-border bg-surface hover:border-accent/50 hover:bg-accent/10'}`}
-            style={dragging ? { backgroundColor: 'rgba(79,255,176,0.15)', transform: 'scale(1.01)' } : {}}
+            style={dragging ? { backgroundColor: 'rgba(79,255,176,0.15)' } : {}}
             onDragOver={e => { e.preventDefault(); setDragging(true) }}
             onDragLeave={() => setDragging(false)}
             onDrop={onDrop}
@@ -457,10 +527,20 @@ export function StepImport() {
           <button onClick={proceed} disabled={loading} className="btn-primary w-full text-base">
             {loading ? 'Lendo...' : 'Extrair texto e revisar →'}
           </button>
+
+          <div className="text-center">
+            <button
+              onClick={() => { setRawText(''); setParsed([], []); setStep(2) }}
+              className="font-mono text-[11px] text-white/20 hover:text-white/50 transition-colors duration-200"
+            >
+              ou criar questões manualmente →
+            </button>
+          </div>
         </>
       )}
 
       {showSuggest && <SuggestionModal onClose={() => setShowSuggest(false)} />}
+    </div>
     </div>
   )
 }

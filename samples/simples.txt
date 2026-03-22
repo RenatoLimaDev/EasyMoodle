@@ -1,0 +1,34 @@
+1) Qual é a capital do Brasil?
+A) São Paulo
+B) Brasília *
+C) Rio de Janeiro
+D) Belo Horizonte
+E) Salvador
+
+2) Qual linguagem é usada para estilizar páginas web?
+A) HTML
+B) JavaScript
+C) CSS *
+D) Python
+E) SQL
+
+3) O que significa a sigla HTTP?
+A) HyperText Terminal Protocol
+B) HyperText Transfer Protocol *
+C) High Transfer Text Protocol
+D) HyperText Transmission Process
+E) Hosting Text Transfer Protocol
+
+4) Qual estrutura de dados segue o princípio LIFO?
+A) Fila
+B) Lista encadeada
+C) Árvore
+D) Pilha *
+E) Grafo
+
+5) Em qual camada do modelo OSI atua o protocolo IP?
+A) Física
+B) Enlace
+C) Rede *
+D) Transporte
+E) Aplicação

@@ -1,0 +1,21 @@
+1) Qual paradigma de programação trata o código como funções matemáticas sem estado mutável?
+A) Orientado a Objetos [fb: POO usa objetos e estado, não é a resposta correta.]
+B) Imperativo [fb: Imperativo descreve passo a passo como o programa deve executar.]
+C) Funcional * [fb: Correto! Programação funcional evita estado mutável e efeitos colaterais.]
+D) Procedural [fb: Procedural organiza código em procedimentos, não elimina estado.]
+E) Lógico [fb: Lógico usa fatos e regras, como em Prolog.]
+
+2) Qual é a complexidade de tempo de uma busca binária no pior caso?
+A) O(1) [fb: O(1) é tempo constante, válido apenas para acesso direto.]
+B) O(n) [fb: O(n) é busca linear, não binária.]
+C) O(log n) * [fb: Correto! A busca binária divide o espaço ao meio a cada iteração.]
+D) O(n log n) [fb: Essa é a complexidade de algoritmos como mergesort.]
+E) O(n²) [fb: O(n²) representa algoritmos quadráticos como bubble sort.]
+
+3) O que é um deadlock em sistemas operacionais?
+A) Quando um processo consome 100% da CPU
+B) Quando dois ou mais processos ficam bloqueados esperando recursos um do outro *
+C) Quando a memória RAM está completamente cheia
+D) Quando um processo é terminado forçadamente
+E) Quando há excesso de threads simultâneas
+ANSWER: B; Feedback: Deadlock ocorre quando processos aguardam indefinidamente por recursos retidos entre si.

@@ -91,18 +91,39 @@ async function parseZipEntries(bytes: Uint8Array): Promise<ZipEntry[]> {
   return entries
 }
 
-// Extract text from RTF — strip RTF control words, keep plain text
+// Extract text from RTF — robust group-aware stripper
 function extractRtf(bytes: Uint8Array): string {
   const enc = detectEncoding(bytes)
-  const raw = new TextDecoder(enc).decode(bytes)
-  return raw
-    .replace(/\{\\[^{}]+\}/g, '')          // remove groups like {\fonttbl ...}
-    .replace(/\\[a-z]+\d*\s?/gi, ' ')      // remove control words like \par \b \f0
-    .replace(/\\\n/g, '\n')                 // line breaks
-    .replace(/[{}\\]/g, '')                 // leftover braces and backslashes
-    .replace(/[ \t]+/g, ' ')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
+  let t = new TextDecoder(enc).decode(bytes)
+
+  // Remove skippable groups {\*\ ...} — e.g. {\*\generator ...}
+  t = t.replace(/\{\\\*\\[^{}]*\}/g, '')
+
+  // Iteratively remove innermost {...} groups until none left
+  let prev = ''
+  while (prev !== t) {
+    prev = t
+    t = t.replace(/\{[^{}]*\}/g, '')
+  }
+
+  // Convert paragraph/line breaks to newlines before stripping control words
+  t = t.replace(/\\pard?\b\s*/g, '\n')
+  t = t.replace(/\\line\b\s*/g, '\n')
+  t = t.replace(/\\sect\b\s*/g, '\n\n')
+
+  // Remove all remaining control words (e.g. \b \f0 \fs24 \ansi)
+  t = t.replace(/\\[a-z]+\d*[ ]?/gi, '')
+
+  // Remove backslash escapes for special chars, then leftover backslashes/braces
+  t = t.replace(/\\([{}\\])/g, '$1')
+  t = t.replace(/[{}\\]/g, '')
+
+  // Clean up whitespace
+  t = t.replace(/[ \t]+/g, ' ')
+  t = t.replace(/\n[ \t]+/g, '\n')
+  t = t.replace(/\n{3,}/g, '\n\n')
+
+  return t.trim()
 }
 
 export async function extractText(file: File): Promise<string> {

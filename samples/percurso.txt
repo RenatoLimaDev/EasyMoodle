@@ -1,0 +1,42 @@
+Questão 1 (Percurso 1.2 – Fundamentos de Redes)
+Uma rede local que conecta dispositivos dentro de um mesmo edifício é classificada como:
+A) WAN
+B) MAN
+C) LAN
+D) PAN
+E) SAN
+ANSWER: C; Feedback: LAN (Local Area Network) cobre ambientes como escritórios e prédios.
+
+Questão 2 (Percurso 1.2 – Fundamentos de Redes)
+O protocolo responsável por atribuir endereços IP dinamicamente na rede é o:
+A) DNS
+B) FTP
+C) SMTP
+D) DHCP
+E) ARP
+ANSWER: D; Feedback: DHCP (Dynamic Host Configuration Protocol) distribui IPs automaticamente.
+
+Questão 3 (Percurso 1.2 – Fundamentos de Redes)
+Qual dispositivo opera na camada de rede do modelo OSI e roteia pacotes entre redes distintas?
+A) Hub
+B) Switch
+C) Repetidor
+D) Roteador
+E) Bridge
+ANSWER: D
+
+Questão 4 (Percurso 2.3 – Segurança da Informação)
+O ataque que engana usuários para revelar informações confidenciais é chamado de:
+A) Spoofing
+B) Phishing *
+C) DDoS
+D) Brute Force
+E) Sniffing
+
+Questão 5 (Percurso 2.3 – Segurança da Informação)
+Qual princípio da segurança da informação garante que os dados não sejam alterados sem autorização?
+A) Confidencialidade
+B) Disponibilidade
+C) Autenticidade
+D) Integridade *
+E) Não-repúdio

@@ -5,3 +5,8 @@ dist
 .vercel
 *.local
 .claude
+
+# Test artifacts (generated, not committed)
+coverage/
+test-results/
+playwright-report/

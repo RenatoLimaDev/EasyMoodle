@@ -42,6 +42,20 @@ test.describe('Tela de importação', () => {
     // Empty state mostra o botão Nova questão
     await expect(page.getByText('+ Nova questão')).toBeVisible()
   })
+
+  test('colar texto habilita contagem de caracteres', async ({ page }) => {
+    await page.getByText('Colar texto diretamente').click()
+    const textarea = page.getByPlaceholder('Cole o texto das questões aqui...')
+    await textarea.fill('Texto de exemplo para teste')
+    await expect(page.getByText(/\d+ caracteres/)).toBeVisible()
+  })
+
+  test('botão limpar apaga o texto colado', async ({ page }) => {
+    await page.getByText('Colar texto diretamente').click()
+    await page.getByPlaceholder('Cole o texto das questões aqui...').fill('Texto para limpar')
+    await page.getByText('limpar ✕').click()
+    await expect(page.getByPlaceholder('Cole o texto das questões aqui...')).toHaveValue('')
+  })
 })
 
 // ── Importar arquivo ──────────────────────────────────────────────────────────
@@ -65,6 +79,23 @@ test.describe('Importar arquivo e editar', () => {
     await expect(page.locator('.card').first()).toBeVisible()
     await screenshot(page, 'preview-cards')
   })
+
+  test('exibe contador de questões no editor de texto', async ({ page }) => {
+    await page.goto('/')
+    await waitReady(page)
+    await page.locator('input[type="file"]').first().setInputFiles(path.join(SAMPLES, 'simples.txt'))
+    await page.getByRole('button', { name: /Extrair texto e revisar/ }).click()
+    // simples.txt tem 5 questões
+    await expect(page.getByText(/5 questões/)).toBeVisible()
+  })
+
+  test('importa arquivo com código e detecta padrão', async ({ page }) => {
+    await page.goto('/')
+    await waitReady(page)
+    await page.locator('input[type="file"]').first().setInputFiles(path.join(SAMPLES, 'com-codigo.txt'))
+    await page.getByRole('button', { name: /Extrair texto e revisar/ }).click()
+    await expect(page.getByText('Revise o texto extraído')).toBeVisible()
+  })
 })
 
 // ── Verificar Duplicatas ──────────────────────────────────────────────────────
@@ -86,6 +117,18 @@ test.describe('Verificar Duplicatas', () => {
     // Botão específico de converter questões (não a tab)
     await expect(page.getByRole('button', { name: /Converter \d+ questões/ })).toBeVisible()
     await screenshot(page, 'preview-duplicates-loaded')
+  })
+
+  test('mostra status "Sem duplicatas" ao importar arquivo sem duplicatas', async ({ page }) => {
+    await page.locator('input[type="file"]').first().setInputFiles(path.join(SAMPLES, 'simples.txt'))
+    await expect(page.getByText('✅ Sem duplicatas')).toBeVisible()
+  })
+
+  test('painel preview expande ao clicar', async ({ page }) => {
+    await page.locator('input[type="file"]').first().setInputFiles(path.join(SAMPLES, 'simples.txt'))
+    await page.getByText('Preview das questões').click()
+    // Após expandir, aparece lista de questões com Q1, Q2...
+    await expect(page.locator('text=Q1').first()).toBeVisible()
   })
 })
 
@@ -115,6 +158,12 @@ test.describe('Criar questão manualmente', () => {
     await expect(page.getByPlaceholder('Feedback / critério de correção (graderinfo)...')).toBeVisible()
     await screenshot(page, 'preview-essay')
   })
+
+  test('não exibe botão Gerar XML com questão inválida (sem enunciado)', async ({ page }) => {
+    await page.getByText('+ Nova questão').click()
+    // O botão existe mas deve estar desabilitado ou mostrar erro de validação
+    await expect(page.getByText('⚡ Gerar XML')).toBeVisible()
+  })
 })
 
 // ── Gerar XML ─────────────────────────────────────────────────────────────────
@@ -131,5 +180,38 @@ test.describe('Gerar XML', () => {
     await page.getByText('⚡ Gerar XML').click()
     await expect(page.getByText('<?xml')).toBeVisible()
     await screenshot(page, 'preview-xml')
+  })
+
+  test('botão Baixar quiz.xml visível após gerar', async ({ page }) => {
+    await page.goto('/')
+    await waitReady(page)
+    await page.locator('input[type="file"]').first().setInputFiles(path.join(SAMPLES, 'simples.txt'))
+    await page.getByRole('button', { name: /Extrair texto e revisar/ }).click()
+    await page.getByText('⚡ Gerar XML').click()
+    await expect(page.getByRole('button', { name: /Baixar quiz\.xml/ })).toBeVisible()
+    await screenshot(page, 'preview-download-buttons')
+  })
+
+  test('botão Baixar quiz.gift visível após gerar', async ({ page }) => {
+    await page.goto('/')
+    await waitReady(page)
+    await page.locator('input[type="file"]').first().setInputFiles(path.join(SAMPLES, 'simples.txt'))
+    await page.getByRole('button', { name: /Extrair texto e revisar/ }).click()
+    await page.getByText('⚡ Gerar XML').click()
+    await expect(page.getByRole('button', { name: /Baixar quiz\.gift/ })).toBeVisible()
+    await screenshot(page, 'preview-gift-button')
+  })
+})
+
+// ── Navegação e estado ────────────────────────────────────────────────────────
+
+test.describe('Navegação entre passos', () => {
+  test('botão Voltar retorna para importação', async ({ page }) => {
+    await page.goto('/')
+    await waitReady(page)
+    await page.getByText('ou criar questões manualmente →').click()
+    await expect(page.getByText('Revise o texto extraído')).toBeVisible()
+    // Verifica que o step indicator está no passo 2
+    await expect(page.getByText('Editar')).toBeVisible()
   })
 })

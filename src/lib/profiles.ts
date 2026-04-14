@@ -9,7 +9,7 @@ export function readProfiles(): Profile[] {
 
 export function saveProfile(name: string, segments: CodeSegments, options: Partial<ConvertOptions>): void {
   const profiles = readProfiles()
-  const id  = `p_${Date.now()}`
+  const id  = `p_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
   const idx = profiles.findIndex(p => p.name === name)
   const profile: Profile = { id, name, segments, options, createdAt: Date.now() }
   if (idx >= 0) profiles[idx] = profile

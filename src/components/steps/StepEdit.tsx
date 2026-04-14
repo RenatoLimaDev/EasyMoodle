@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useStore } from '@/store'
 import { parseText, findDuplicates, detectCodeInText, inferTemplate, groupByUnit } from '@/lib/parser'
 import { buildAllUnits } from '@/lib/xmlBuilder'
+import { buildGift } from '@/lib/giftBuilder'
 import { triggerDownload } from '@/lib/extractor'
 import type { Alternative, Question, UnitGroup } from '@/types'
 
@@ -169,6 +170,27 @@ export function StepEdit() {
   const downloadUnit = (u: UnitGroup) => triggerDownload(u.xml, `${u.unitKey.toLowerCase()}.xml`)
   const downloadAll  = () => units.forEach((u, i) => setTimeout(() => downloadUnit(u), i * 300))
   const downloadSingle = () => { if (units[0]) triggerDownload(units[0].xml, 'quiz.xml') }
+
+  const buildGiftOpts = () => {
+    const unitTemplates: Record<string, string> = {}
+    unitGroups.forEach(g => {
+      const mods = g.questions.map(q => q.percursoMod).filter(Boolean)
+      const groupMod = mods.length > 0 ? mods[0] : segments.mod
+      const t = buildUnitTemplate(g.unitKey, groupMod)
+      if (t) unitTemplates[g.unitKey] = t
+    })
+    return { ...options, codeTemplate, unitOffsets: {}, unitTemplates, segments }
+  }
+  const downloadUnitGift = (u: UnitGroup) => {
+    const gift = buildGift(u.questions, buildGiftOpts(), u.startQ, detectedPattern, u.unitKey)
+    triggerDownload(gift, `${u.unitKey.toLowerCase()}.gift`)
+  }
+  const downloadAllGift  = () => units.forEach((u, i) => setTimeout(() => downloadUnitGift(u), i * 300))
+  const downloadSingleGift = () => {
+    if (!units[0]) return
+    const gift = buildGift(units[0].questions, buildGiftOpts(), units[0].startQ, detectedPattern, units[0].unitKey)
+    triggerDownload(gift, 'quiz.gift')
+  }
 
   const updateText = (txt: string) => {
     setRawText(txt)
@@ -1066,13 +1088,22 @@ export function StepEdit() {
                     <div className="font-bold text-accent4 text-sm">{unitLabel(u.unitKey)}</div>
                     <div className="text-xs font-mono text-white/30">{u.questions.length}q · Q{u.startQ}–Q{u.startQ + u.questions.length - 1}</div>
                   </div>
-                  <button onClick={() => downloadUnit(u)} className="btn-secondary text-xs">⬇️ {u.unitKey.toLowerCase()}.xml</button>
+                  <div className="flex gap-2">
+                    <button onClick={() => downloadUnit(u)} className="btn-secondary text-xs">⬇️ {u.unitKey.toLowerCase()}.xml</button>
+                    <button onClick={() => downloadUnitGift(u)} className="btn-secondary text-xs">⬇️ {u.unitKey.toLowerCase()}.gift</button>
+                  </div>
                 </div>
               ))}
-              <button onClick={downloadAll} className="w-full py-3 border border-accent text-accent font-bold text-sm rounded-xl hover:bg-accent/5 transition-all">⬇️ Baixar todos os XMLs</button>
+              <div className="flex gap-2">
+                <button onClick={downloadAll} className="flex-1 py-3 border border-accent text-accent font-bold text-sm rounded-xl hover:bg-accent/5 transition-all">⬇️ Baixar todos os XMLs</button>
+                <button onClick={downloadAllGift} className="flex-1 py-3 border border-accent4 text-accent4 font-bold text-sm rounded-xl hover:bg-accent4/5 transition-all">⬇️ Baixar todos os GIFTs</button>
+              </div>
             </div>
           ) : (
-            <button onClick={downloadSingle} className="btn-secondary w-full py-3 text-sm font-bold">⬇️ Baixar quiz.xml</button>
+            <div className="flex gap-2">
+              <button onClick={downloadSingle} className="btn-secondary flex-1 py-3 text-sm font-bold">⬇️ Baixar quiz.xml</button>
+              <button onClick={downloadSingleGift} className="btn-secondary flex-1 py-3 text-sm font-bold">⬇️ Baixar quiz.gift</button>
+            </div>
           )}
           </div>
           </div>

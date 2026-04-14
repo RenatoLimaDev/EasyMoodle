@@ -71,7 +71,7 @@ describe('buildXml — tipo multichoice', () => {
     expect(xml).not.toContain('type="multichoice_multi"')
   })
 
-  it('type="multichoice_multi" quando há 2 corretas', () => {
+  it('mantém type="multichoice" quando há 2 corretas (múltipla resposta usa <single>false</single>)', () => {
     const q = makeQuestion({
       alternativas: [
         { letra: 'A', texto: 'Correta 1', correta: true,  feedback: '' },
@@ -80,7 +80,8 @@ describe('buildXml — tipo multichoice', () => {
       ],
     })
     const xml = buildXml([q], baseOpts, 1, '')
-    expect(xml).toContain('type="multichoice_multi"')
+    expect(xml).toContain('type="multichoice"')
+    expect(xml).toContain('<single>false</single>')
   })
 
   it('fraction="100" para alternativa correta (única)', () => {

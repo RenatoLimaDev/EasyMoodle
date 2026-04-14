@@ -530,7 +530,8 @@ export function StepImport() {
 
           <button
             onClick={() => { setRawText(''); setParsed([], []); setStep(2) }}
-            className="btn-secondary w-full text-sm"
+            className="w-full py-3 rounded-xl border-2 border-dashed border-accent4/50 text-accent4
+                       font-semibold text-sm hover:border-accent4 hover:bg-accent4/10 transition-all duration-200"
           >
             ✏️ Criar questões manualmente
           </button>

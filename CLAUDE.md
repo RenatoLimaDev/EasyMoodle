@@ -125,4 +125,9 @@ Ver seção **Backlog** abaixo. Pegar o item de maior prioridade.
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan
+at: specs/001-automacao-cli/plan.md
+
+**Feature em andamento**: Automação CLI/API (spec: specs/001-automacao-cli/spec.md)
+- research.md, data-model.md e contracts/cli-contract.md: ✅ completos
+- Próximo passo: `/speckit-tasks` → gerar tasks.md → implementar
 <!-- SPECKIT END -->

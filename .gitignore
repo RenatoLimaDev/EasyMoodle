@@ -5,6 +5,7 @@ dist
 .vercel
 *.local
 .claude/settings.local.json
+.claude/session-state.md
 
 # Test artifacts (generated, not committed)
 coverage/
